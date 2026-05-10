@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Sistema de Gestão Empresarial",
+    "slug": "sistema-gestao-empresarial",
+    "scheme": "sistema-gestao-empresarial",
+    "version": "2.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#f5f7fb"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {}
+  }
+}

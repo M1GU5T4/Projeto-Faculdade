@@ -1,28 +1,15 @@
 FROM node:18-alpine
 
-# Diretório de trabalho
 WORKDIR /app/backend
 
-# Dependências do sistema
 RUN apk add --no-cache curl git bash
 
-# Copiamos package.json e package-lock se houver
 COPY backend/package*.json ./
+RUN npm ci
 
-# Instalamos dependências do backend
-RUN npm ci --only=production
-
-# Copiamos todo o backend
 COPY backend ./
-
-# Geramos Prisma Client
 RUN npm run db:generate
 
-# Build do TypeScript do backend
-RUN npm run build
-
-# Cria diretório de dados SQLite e usuário não-root
-RUN mkdir -p /app/backend/data
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 RUN chown -R nodejs:nodejs /app
 USER nodejs
@@ -31,4 +18,4 @@ EXPOSE 3002
 
 ENV NODE_ENV=production
 
-CMD ["npm", "start"]
+CMD ["npx", "tsx", "src/server.ts"]

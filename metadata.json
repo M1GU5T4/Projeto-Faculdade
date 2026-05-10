@@ -1,5 +1,7 @@
 {
-  "name": "Orçamento",
-  "description": "Um aplicativo de painel para gerenciar e rastrear ordens de serviço de mão de obra. Visualize métricas importantes, gerencie clientes e serviços e acompanhe o progresso do seu negócio com uma interface limpa e moderna.",
-  "requestFramePermissions": []
+  "name": "Sistema de Gestão Empresarial",
+  "description": "ERP/CRM mobile para Android e iOS",
+  "platform": "mobile",
+  "framework": "expo",
+  "version": "2.1.0"
 }

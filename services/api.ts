@@ -1,47 +1,47 @@
 import axios, { AxiosError } from 'axios';
+import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TOKEN_KEY = 'token';
 const USER_KEY = 'currentUser';
-const rawApiUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3002').replace(/\/$/, '');
-const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
+const DEFAULT_API_PORT = '3002';
+const rawConfiguredApiUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
+const expoHost = Constants.executionEnvironment !== 'standalone'
+  ? (Constants.expoConfig?.hostUri ?? Constants.platform?.hostUri ?? Constants.linkingUri)
+  : null;
+const resolvedExpoHost = expoHost
+  ? expoHost.replace(/^[a-z]+:\/\//i, '').split('/')[0].split(':')[0]
+  : null;
+const shouldReplaceLocalhost = !rawConfiguredApiUrl || /(^|\/\/)(localhost|127\.0\.0\.1)(:\d+)?($|\/)/.test(rawConfiguredApiUrl);
+const rawApiUrl = shouldReplaceLocalhost && resolvedExpoHost
+  ? `http://${resolvedExpoHost}:${DEFAULT_API_PORT}`
+  : (rawConfiguredApiUrl || `http://localhost:${DEFAULT_API_PORT}`);
+export const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/api`;
 
 const api = axios.create({
   baseURL: API_URL,
 });
 
-const getStoredToken = () => localStorage.getItem(TOKEN_KEY);
-
-const getStoredUser = () => {
-  const rawUser = localStorage.getItem(USER_KEY);
-  if (!rawUser) return null;
-
-  try {
-    return JSON.parse(rawUser);
-  } catch {
-    localStorage.removeItem(USER_KEY);
-    return null;
-  }
+const getStoredToken = async () => AsyncStorage.getItem(TOKEN_KEY);
+const getStoredUser = async () => {
+  const rawUser = await AsyncStorage.getItem(USER_KEY);
+  return rawUser ? JSON.parse(rawUser) : null;
 };
 
-const persistSession = (token: string, user?: unknown) => {
-  localStorage.setItem(TOKEN_KEY, token);
+const persistSession = async (token: string, user?: unknown) => {
+  await AsyncStorage.setItem(TOKEN_KEY, token);
   if (user) {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
   }
 };
 
-const clearSession = () => {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
+const clearSession = async () => {
+  await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
 };
 
 const normalizeError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
-    const apiMessage =
-      error.response?.data?.error ||
-      error.response?.data?.message ||
-      error.message;
-
+    const apiMessage = error.response?.data?.error || error.response?.data?.message || error.message;
     return new Error(apiMessage || 'Erro ao comunicar com a API.');
   }
 
@@ -52,13 +52,8 @@ const normalizeError = (error: unknown) => {
   return new Error('Erro inesperado.');
 };
 
-const getAuthHeaders = () => {
-  const token = getStoredToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
-
-api.interceptors.request.use((config) => {
-  const token = getStoredToken();
+api.interceptors.request.use(async (config) => {
+  const token = await getStoredToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -67,39 +62,35 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
-      clearSession();
+      await clearSession();
     }
-
     return Promise.reject(normalizeError(error));
   }
 );
 
-export const validateAuth = () => Boolean(getStoredToken());
+export const validateAuth = async () => Boolean(await getStoredToken());
 
 export const authService = {
   login: async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password });
     if (response.data.token) {
-      persistSession(response.data.token, response.data.user);
+      await persistSession(response.data.token, response.data.user);
     }
     return response.data;
   },
-
   register: async (name: string, email: string, password: string) => {
     const response = await api.post('/auth/register', { name, email, password });
     if (response.data.token) {
-      persistSession(response.data.token, response.data.user);
+      await persistSession(response.data.token, response.data.user);
     }
     return response.data;
   },
-
-  logout: () => {
-    clearSession();
+  logout: async () => {
+    await clearSession();
   },
-
-  getCurrentUser: () => getStoredUser(),
+  getCurrentUser: async () => getStoredUser(),
 };
 
 export const clientService = {
@@ -123,9 +114,7 @@ export const quoteService = {
   update: async (id: string, data: any) => (await api.put(`/quotes/${id}`, data)).data,
   delete: async (id: string) => (await api.delete(`/quotes/${id}`)).data,
   convertToProject: async (id: string, data: any) => (await api.post(`/quotes/${id}/convert-to-project`, data)).data,
-  generatePDF: async (id: string) => fetch(`${API_URL}/quotes/${id}/pdf`, {
-    headers: getAuthHeaders(),
-  }),
+  generatePDF: async (id: string) => api.get(`/quotes/${id}/pdf`, { responseType: 'blob' }),
 };
 
 export const invoiceService = {
@@ -143,22 +132,16 @@ export const projectService = {
   create: async (data: any) => (await api.post('/projects', data)).data,
   update: async (id: string, data: any) => (await api.put(`/projects/${id}`, data)).data,
   delete: async (id: string) => (await api.delete(`/projects/${id}`)).data,
-  updateTask: async (projectId: string, taskId: string, isCompleted: boolean) =>
-    (await api.patch(`/projects/${projectId}/tasks/${taskId}`, { isCompleted })).data,
-  updateProgress: async (id: string, progress: number) =>
-    (await api.patch(`/projects/${id}/progress`, { progress })).data,
+  updateTask: async (projectId: string, taskId: string, isCompleted: boolean) => (await api.patch(`/projects/${projectId}/tasks/${taskId}`, { isCompleted })).data,
+  updateProgress: async (id: string, progress: number) => (await api.patch(`/projects/${id}/progress`, { progress })).data,
   getExpenses: async (id: string) => (await api.get(`/projects/${id}/expenses`)).data,
   createExpense: async (id: string, data: any) => (await api.post(`/projects/${id}/expenses`, data)).data,
-  updateExpense: async (id: string, expenseId: string, data: any) =>
-    (await api.put(`/projects/${id}/expenses/${expenseId}`, data)).data,
-  deleteExpense: async (id: string, expenseId: string) =>
-    (await api.delete(`/projects/${id}/expenses/${expenseId}`)).data,
+  updateExpense: async (id: string, expenseId: string, data: any) => (await api.put(`/projects/${id}/expenses/${expenseId}`, data)).data,
+  deleteExpense: async (id: string, expenseId: string) => (await api.delete(`/projects/${id}/expenses/${expenseId}`)).data,
   getNotes: async (id: string) => (await api.get(`/projects/${id}/notes`)).data,
   createNote: async (id: string, data: any) => (await api.post(`/projects/${id}/notes`, data)).data,
-  updateNote: async (id: string, noteId: string, data: any) =>
-    (await api.put(`/projects/${id}/notes/${noteId}`, data)).data,
-  deleteNote: async (id: string, noteId: string) =>
-    (await api.delete(`/projects/${id}/notes/${noteId}`)).data,
+  updateNote: async (id: string, noteId: string, data: any) => (await api.put(`/projects/${id}/notes/${noteId}`, data)).data,
+  deleteNote: async (id: string, noteId: string) => (await api.delete(`/projects/${id}/notes/${noteId}`)).data,
   getReport: async (id: string) => (await api.get(`/projects/${id}/report`)).data,
   getFinancialSummary: async (id: string) => {
     const report = await api.get(`/projects/${id}/report`);
@@ -172,8 +155,7 @@ export const expenseService = {
   create: async (data: any) => (await api.post('/expenses', data)).data,
   update: async (id: string, data: any) => (await api.put(`/expenses/${id}`, data)).data,
   delete: async (id: string) => (await api.delete(`/expenses/${id}`)).data,
-  getByCategoryReport: async (params?: Record<string, string>) =>
-    (await api.get('/expenses/reports/by-category', { params })).data,
+  getByCategoryReport: async (params?: Record<string, string>) => (await api.get('/expenses/reports/by-category', { params })).data,
 };
 
 export const stockService = {

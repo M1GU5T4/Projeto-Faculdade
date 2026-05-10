@@ -1,7 +1,7 @@
-// Função para fazer requisições autenticadas (copiada de api.ts para evitar dependência circular)
+import { API_URL } from './api';
+
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
-  const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.REACT_APP_API_URL || 'http://localhost:3002/api';
-  const token = localStorage.getItem('authToken');
+  const token = null;
 
   const config: RequestInit = {
     ...options,
@@ -12,7 +12,7 @@ const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
     },
   };
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+  const response = await fetch(`${API_URL}${endpoint}`, config);
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Erro desconhecido' }));

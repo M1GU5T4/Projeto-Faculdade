@@ -1,8 +1,6 @@
 type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
 
-const isDevelopment = typeof import.meta !== 'undefined'
-  ? import.meta.env?.DEV
-  : false;
+const isDevelopment = process.env.NODE_ENV !== 'production';
 
 const formatPrefix = (level: LogLevel, context?: string, action?: string) => {
   const base = `[${level}]`;

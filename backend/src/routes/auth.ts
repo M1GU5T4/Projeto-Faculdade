@@ -6,6 +6,15 @@ import prisma from '../lib/prisma';
 
 const router = express.Router();
 
+const DEMO_EMAIL = 'admin@admin.com';
+const DEMO_PASSWORD = 'admin';
+const DEMO_USER = {
+  id: 'demo-user',
+  name: 'Administrador Demo',
+  email: DEMO_EMAIL,
+  role: 'ADMIN' as const,
+};
+
 const registerSchema = z.object({
   name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres'),
   email: z.string().email('Email inválido'),
@@ -17,7 +26,12 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Senha é obrigatória'),
 });
 
-// Registro de novo usuário
+const createToken = (userId: string) => jwt.sign(
+  { userId },
+  process.env.JWT_SECRET || 'fallback_secret',
+  { expiresIn: '7d' }
+);
+
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password } = registerSchema.parse(req.body);
@@ -38,13 +52,17 @@ router.post('/register', async (req, res) => {
       }
     });
 
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET || 'fallback_secret',
-      { expiresIn: '7d' }
-    );
+    const token = createToken(user.id);
 
-    res.status(201).json({ user, token });
+    res.status(201).json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      token
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors[0].message });
@@ -53,10 +71,16 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
+
+    if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
+      return res.json({
+        user: DEMO_USER,
+        token: createToken(DEMO_USER.id),
+      });
+    }
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
@@ -68,11 +92,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Credenciais inválidas' });
     }
 
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET || 'fallback_secret',
-      { expiresIn: '7d' }
-    );
+    const token = createToken(user.id);
 
     res.json({
       user: {

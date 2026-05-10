@@ -1,43 +1,46 @@
 version: '3.8'
 
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: orcamento_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-erp_crm}
+      MYSQL_USER: ${MYSQL_USER:-erp_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp_pass}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - app-network
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     container_name: orcamento_backend
     restart: unless-stopped
+    depends_on:
+      - mysql
     ports:
       - "3002:3002"
     environment:
-      DATABASE_URL: "file:/app/backend/data/dev.db"
+      DATABASE_URL: "mysql://${MYSQL_USER:-erp_user}:${MYSQL_PASSWORD:-erp_pass}@mysql:3306/${MYSQL_DATABASE:-erp_crm}"
       JWT_SECRET: "${JWT_SECRET:-super_secret_32_chars_min}"
       ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@yourcompany.com}"
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin1234}"
       ADMIN_NAME: "${ADMIN_NAME:-Administrator}"
+      FRONTEND_URL: "${FRONTEND_URL:-http://localhost:19006}"
       NODE_ENV: production
       PORT: 3002
-      FRONTEND_URL: "http://localhost:3001"
-    volumes:
-      - sqlite_data:/app/backend/data
-    networks:
-      - app-network
-
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-    container_name: orcamento_frontend
-    restart: unless-stopped
-    ports:
-      - "3001:80"
-    environment:
-      VITE_API_URL: "http://localhost:3002/api"
     networks:
       - app-network
 
 volumes:
-  sqlite_data:
+  mysql_data:
     driver: local
 
 networks:
