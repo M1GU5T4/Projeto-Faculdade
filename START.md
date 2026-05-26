@@ -310,4 +310,4 @@ npx expo start --clear
 
 ---
 
-Fazendo Programa 
+Fazendo Programa

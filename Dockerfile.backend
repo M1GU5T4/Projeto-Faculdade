@@ -2,13 +2,13 @@ FROM node:18-alpine
 
 WORKDIR /app/backend
 
-RUN apk add --no-cache curl git bash
+RUN apk add --no-cache curl git bash openssl openssl-dev libc6-compat
 
 COPY backend/package*.json ./
 RUN npm ci
 
 COPY backend ./
-RUN npm run db:generate
+RUN npx prisma generate
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 RUN chown -R nodejs:nodejs /app
