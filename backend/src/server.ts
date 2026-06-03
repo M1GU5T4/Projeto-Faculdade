@@ -50,21 +50,13 @@ app.use(helmet({
   }
 }));
 
-// CORS configurado para produção
-const allowedOrigins = NODE_ENV === 'production' 
+// CORS configurado para aceitar app mobile e web
+const allowedOrigins = NODE_ENV === 'production'
   ? (process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : [])
-  : [
-      'http://localhost:5173', 
-      'http://localhost:3000', 
-      'http://localhost:3001', 
-      'http://localhost:4173',
-      'http://localhost:4174', 
-      'http://localhost:4175',
-      'http://127.0.0.1:5500'
-    ];
+  : null; // null = aceita qualquer origem em desenvolvimento
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: allowedOrigins === null ? true : allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
