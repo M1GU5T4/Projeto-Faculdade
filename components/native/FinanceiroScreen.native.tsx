@@ -45,6 +45,7 @@ export default function FinanceiroScreen({ navigation }: any) {
   }, [expenses, invoices, projects, quotes]);
 
   const clientNameById = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
+  const invoiceNumberById = useMemo(() => new Map(invoices.map((invoice) => [invoice.id, invoice.invoiceNumber])), [invoices]);
 
   const pendingInvoices = useMemo(() =>
     [...invoices].filter((i) => i.status !== InvoiceStatus.Pago).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()).slice(0, 4),
@@ -86,16 +87,20 @@ export default function FinanceiroScreen({ navigation }: any) {
             <SecondaryButton label="Orçamentos" onPress={() => navigation.navigate('Orçamentos')} />
             <SecondaryButton label="Faturas" onPress={() => navigation.navigate('Faturas')} />
             <SecondaryButton label="Despesas" onPress={() => navigation.navigate('Despesas')} />
+            <SecondaryButton label="Projetos" onPress={() => navigation.navigate('Projetos')} />
           </View>
         </Card>
 
         <Card>
-          <Text style={sharedStyles.cardTitle}>Indicadores</Text>
+          <Text style={sharedStyles.cardTitle}>Indicadores integrados</Text>
           <View style={sharedStyles.badgeRow}>
             <Badge label={`Orçamentos aprovados ${metrics.aprovados}`} />
             <Badge label={`Projetos ativos ${metrics.projetosAtivos}`} />
+            <Badge label={`Faturas em aberto ${pendingInvoices.length}`} />
+            <Badge label={`Despesas ${expenses.length}`} />
             <Badge label={`Clientes ${clients.length}`} />
           </View>
+          <Text style={sharedStyles.helper}>Saldo considera valores recebidos menos despesas registradas.</Text>
         </Card>
 
         <Card>
@@ -121,16 +126,19 @@ export default function FinanceiroScreen({ navigation }: any) {
           <Text style={sharedStyles.cardTitle}>Despesas recentes</Text>
           {recentExpenses.length === 0
             ? <Text style={sharedStyles.helper}>Nenhuma despesa cadastrada.</Text>
-            : recentExpenses.map((exp) => (
-              <View key={exp.id} style={sharedStyles.financeRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={sharedStyles.cardTitle}>{exp.description}</Text>
-                  <Text style={sharedStyles.cardText}>{exp.category}</Text>
-                  <Text style={sharedStyles.helper}>{formatDate(exp.date)}</Text>
+            : recentExpenses.map((exp) => {
+              const invoiceNumber = exp.invoiceId ? invoiceNumberById.get(exp.invoiceId) : null;
+              return (
+                <View key={exp.id} style={sharedStyles.financeRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={sharedStyles.cardTitle}>{exp.description}</Text>
+                    <Text style={sharedStyles.cardText}>{exp.category}</Text>
+                    <Text style={sharedStyles.helper}>{invoiceNumber ? `Fatura vinculada: ${invoiceNumber}` : 'Despesa avulsa'} · {formatDate(exp.date)}</Text>
+                  </View>
+                  <Text style={sharedStyles.cardText}>{formatCurrency(exp.amount)}</Text>
                 </View>
-                <Text style={sharedStyles.cardText}>{formatCurrency(exp.amount)}</Text>
-              </View>
-            ))}
+              );
+            })}
         </Card>
       </ScrollView>
     </ScreenShell>

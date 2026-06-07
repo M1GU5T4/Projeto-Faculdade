@@ -177,8 +177,6 @@ export const stockService = {
 export const settingsService = {
   getSettings: async () => (await api.get('/settings')).data,
   updateSettings: async (data: any) => (await api.put('/settings', data)).data,
-  testGeminiToken: async (apiKey: string) => (await api.post('/settings/test-gemini', { apiKey })).data,
-  removeGeminiToken: async () => (await api.delete('/settings/gemini-token')).data,
 };
 
 export default api;

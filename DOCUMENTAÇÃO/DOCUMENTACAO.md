@@ -37,8 +37,7 @@ Sistema de Gestão Empresarial completo para dispositivos móveis (Android e iOS
 - **Despesas** — controle financeiro com relatórios por categoria
 - **Estoque** — categorias, itens, movimentações e relatórios
 - **Dashboard** — métricas consolidadas e atividades recentes
-- **Configurações** — tema, notificações, integração Gemini AI
-- **Backup IA** — análise de dados e geração de código via Google Gemini
+- **Configurações** — tema e notificações
 
 ---
 
@@ -76,7 +75,6 @@ Sistema de Gestão Empresarial completo para dispositivos móveis (Android e iOS
 | **Helmet** | 7.1.0 | Headers de segurança |
 | **PDFKit** | 0.17.2 | Geração de PDFs |
 | **Puppeteer** | 24.26.1 | Renderização de PDFs avançada |
-| **@google/generative-ai** | 0.24.1 | Integração Google Gemini AI |
 | **tsx** | 4.20.6 | Execução TypeScript em dev (watch mode) |
 
 ### Containerização
@@ -107,7 +105,6 @@ teste-painel/
 │
 ├── services/
 │   ├── api.ts                       # Cliente HTTP Axios + todos os serviços
-│   ├── geminiBackupService.ts       # Serviço de backup com Gemini AI
 │   └── logger.ts                    # Logger do cliente
 │
 ├── components/
@@ -137,9 +134,7 @@ teste-painel/
 │       │   ├── stock.ts             # Rotas de estoque
 │       │   ├── settings-simple.ts   # Rotas de configurações (ativo)
 │       │   ├── settings.ts          # Configurações com Prisma (inativo)
-│       │   └── geminiBackup.ts      # Rotas de backup com IA
 │       ├── services/
-│       │   ├── geminiBackupService.ts
 │       │   └── projectService.ts
 │       ├── lib/
 │       │   ├── prisma.ts            # Singleton do Prisma Client
@@ -213,7 +208,7 @@ index.tsx
 | `projectService` | `/projects` | CRUD + tarefas, despesas, notas, `getReport()`, `getFinancialSummary()` |
 | `expenseService` | `/expenses` | CRUD + `getByCategoryReport()` |
 | `stockService` | `/stock` | Categorias CRUD, Itens CRUD, Movimentações, Relatórios |
-| `settingsService` | `/settings` | `getSettings()`, `updateSettings()`, `testGeminiToken()`, `removeGeminiToken()` |
+| `settingsService` | `/settings` | `getSettings()`, `updateSettings()` |
 
 ### 4.5 Tipos do Domínio (`types.ts`)
 
@@ -444,10 +439,9 @@ index.tsx
 | Projetos | `/api/projects` | 16 | ✅ |
 | Despesas | `/api/expenses` | 6 | ✅ |
 | Dashboard | `/api/dashboard` | 2 | ✅ |
-| Configurações | `/api/settings` | 4 | ✅ |
+| Configurações | `/api/settings` | 2 | ✅ |
 | Estoque | `/api/stock` | 13 | ✅ |
-| Gemini Backup | `/api/gemini-backup` | 7 | ✅ |
-| **TOTAL** | | **73** | |
+| **TOTAL** | | **66** | |
 
 ---
 
@@ -783,8 +777,6 @@ Gera PDF via PDFKit com: cabeçalho da empresa ("HE SEGURANÇA ELETRÔNICA"), da
 |---|---|---|
 | `GET` | `/api/settings` | Obter configurações do usuário |
 | `PUT` | `/api/settings` | Atualizar configurações |
-| `POST` | `/api/settings/test-gemini` | Testar chave API do Gemini |
-| `DELETE` | `/api/settings/gemini-token` | Remover chave do Gemini |
 
 **Resposta padrão (GET)**:
 ```json
@@ -802,11 +794,8 @@ Gera PDF via PDFKit com: cabeçalho da empresa ("HE SEGURANÇA ELETRÔNICA"), da
 
 | Campo | Tipo | Regras |
 |---|---|---|
-| `geminiApiKey` | string? | chave da API Gemini |
 | `theme` | string? | tema visual |
 | `notifications` | object? | `{ newQuotes, overdueInvoices, weeklyReports }` |
-
-> A `geminiApiKey` é retornada mascarada (primeiros 8 + `***` + últimos 8 caracteres).
 
 ---
 
@@ -883,31 +872,6 @@ Gera PDF via PDFKit com: cabeçalho da empresa ("HE SEGURANÇA ELETRÔNICA"), da
 
 ---
 
-### 8.12 Gemini Backup (`/api/gemini-backup`)
-
-| Método | Rota | Descrição |
-|---|---|---|
-| `GET` | `/api/gemini-backup/status` | Status do serviço Gemini |
-| `POST` | `/api/gemini-backup/request` | Enviar requisição de backup IA |
-| `POST` | `/api/gemini-backup/analyze` | Análise rápida de dados |
-| `POST` | `/api/gemini-backup/generate-code` | Gerar código via IA |
-| `POST` | `/api/gemini-backup/resolve-error` | Resolver erros via IA |
-| `POST` | `/api/gemini-backup/full-backup` | Backup completo dos dados |
-| `POST` | `/api/gemini-backup/complete-feature` | Completar funcionalidade via IA |
-
-> Todos retornam `503` se `GEMINI_API_KEY` não estiver configurada.
-
-**Body `/request`**:
-
-| Campo | Tipo | Regras |
-|---|---|---|
-| `type` | enum | `data_analysis` \| `code_generation` \| `error_resolution` \| `feature_completion` \| `data_backup` |
-| `context` | any? | contexto adicional |
-| `requirements` | string | mín. 10 caracteres |
-| `fallbackData` | any? | dados de fallback |
-
----
-
 ## 9. Infraestrutura Docker
 
 ### 9.1 Docker Compose (Produção)
@@ -974,7 +938,6 @@ FROM node:18-alpine
 | `JWT_SECRET` | *(obrigatório)* | Chave secreta para assinar tokens JWT |
 | `PORT` | `3002` | Porta do servidor |
 | `NODE_ENV` | `development` | Ambiente (`development` / `production`) |
-| `GEMINI_API_KEY` | — | Chave API do Google Gemini |
 | `FRONTEND_URL` | `http://localhost:5173` | URL do frontend para CORS (produção) |
 | `ADMIN_EMAIL` | `admin@admin.com` | Email do admin para seed |
 | `ADMIN_PASSWORD` | `admin` | Senha do admin para seed |

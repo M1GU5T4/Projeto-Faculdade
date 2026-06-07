@@ -1,9 +1,104 @@
-import React, { useState } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import {
   View, Text, TextInput, Pressable, FlatList,
   SafeAreaView, StyleSheet,
 } from 'react-native';
 import { InvoiceStatus, ProjectStatus, QuoteStatus } from '../../types';
+
+export type ThemeMode = 'light' | 'dark' | 'auto';
+export type ResolvedThemeMode = 'light' | 'dark';
+
+export type ThemeColors = {
+  background: string;
+  surface: string;
+  surfaceMuted: string;
+  text: string;
+  textSecondary: string;
+  textMuted: string;
+  border: string;
+  borderMuted: string;
+  primary: string;
+  primarySoft: string;
+  primaryText: string;
+  input: string;
+  placeholder: string;
+  overlay: string;
+  success: string;
+  successSoft: string;
+  successBorder: string;
+  danger: string;
+  dangerSoft: string;
+  dangerBorder: string;
+};
+
+export const appThemes: Record<ResolvedThemeMode, ThemeColors> = {
+  light: {
+    background: '#f5f7fb',
+    surface: '#ffffff',
+    surfaceMuted: '#f8fafc',
+    text: '#0f172a',
+    textSecondary: '#475569',
+    textMuted: '#64748b',
+    border: '#e2e8f0',
+    borderMuted: '#f1f5f9',
+    primary: '#2563eb',
+    primarySoft: '#eff6ff',
+    primaryText: '#ffffff',
+    input: '#ffffff',
+    placeholder: '#94a3b8',
+    overlay: 'rgba(0,0,0,0.4)',
+    success: '#166534',
+    successSoft: '#f0fdf4',
+    successBorder: '#bbf7d0',
+    danger: '#991b1b',
+    dangerSoft: '#fef2f2',
+    dangerBorder: '#fecaca',
+  },
+  dark: {
+    background: '#020617',
+    surface: '#0f172a',
+    surfaceMuted: '#1e293b',
+    text: '#f8fafc',
+    textSecondary: '#cbd5e1',
+    textMuted: '#94a3b8',
+    border: '#334155',
+    borderMuted: '#1e293b',
+    primary: '#60a5fa',
+    primarySoft: '#172554',
+    primaryText: '#020617',
+    input: '#111827',
+    placeholder: '#64748b',
+    overlay: 'rgba(0,0,0,0.65)',
+    success: '#86efac',
+    successSoft: '#052e16',
+    successBorder: '#166534',
+    danger: '#fca5a5',
+    dangerSoft: '#450a0a',
+    dangerBorder: '#991b1b',
+  },
+};
+
+type AppThemeContextValue = {
+  mode: ThemeMode;
+  resolvedMode: ResolvedThemeMode;
+  colors: ThemeColors;
+};
+
+const defaultThemeValue: AppThemeContextValue = {
+  mode: 'light',
+  resolvedMode: 'light',
+  colors: appThemes.light,
+};
+
+const AppThemeContext = createContext<AppThemeContextValue>(defaultThemeValue);
+
+export function ThemeProvider({ value, children }: { value: AppThemeContextValue; children: React.ReactNode }) {
+  return <AppThemeContext.Provider value={value}>{children}</AppThemeContext.Provider>;
+}
+
+export function useAppTheme() {
+  return useContext(AppThemeContext);
+}
 
 // ─── Formatadores ────────────────────────────────────────────────────────────
 
@@ -75,10 +170,11 @@ export function ScreenShell({ title, action, children }: {
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const { colors } = useAppTheme();
   return (
-    <SafeAreaView style={sharedStyles.screen}>
+    <SafeAreaView style={[sharedStyles.screen, { backgroundColor: colors.background }]}>
       <View style={sharedStyles.headerRow}>
-        <Text style={sharedStyles.title}>{title}</Text>
+        <Text style={[sharedStyles.title, { color: colors.text }]}>{title}</Text>
         {action}
       </View>
       {children}
@@ -86,19 +182,21 @@ export function ScreenShell({ title, action, children }: {
   );
 }
 
-export function Card({ children, style }: { children: React.ReactNode; style?: object }) {
-  return <View style={[sharedStyles.card, style]}>{children}</View>;
+export function Card({ children, style }: { children: React.ReactNode; style?: object | object[] }) {
+  const { colors } = useAppTheme();
+  return <View style={[sharedStyles.card, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>{children}</View>;
 }
 
 export function StatCard({ label, value, iconLabel }: { label: string; value: string; iconLabel: string }) {
+  const { colors } = useAppTheme();
   return (
-    <View style={sharedStyles.statCard}>
-      <View style={sharedStyles.statIcon}>
+    <View style={[sharedStyles.statCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={[sharedStyles.statIcon, { backgroundColor: colors.primarySoft }]}>
         <Text style={sharedStyles.statIconText}>{iconLabel}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={sharedStyles.statLabel}>{label}</Text>
-        <Text style={sharedStyles.statValue}>{value}</Text>
+        <Text style={[sharedStyles.statLabel, { color: colors.textMuted }]}>{label}</Text>
+        <Text style={[sharedStyles.statValue, { color: colors.text }]}>{value}</Text>
       </View>
     </View>
   );
@@ -109,53 +207,65 @@ export function SearchField({ value, onChangeText, placeholder }: {
   onChangeText: (v: string) => void;
   placeholder: string;
 }) {
+  const { colors } = useAppTheme();
   return (
     <TextInput
       value={value}
       onChangeText={onChangeText}
       placeholder={placeholder}
-      placeholderTextColor="#94a3b8"
-      style={sharedStyles.searchInput}
+      placeholderTextColor={colors.placeholder}
+      style={[sharedStyles.searchInput, { backgroundColor: colors.input, borderColor: colors.border, color: colors.text }]}
     />
   );
 }
 
 export function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const { colors } = useAppTheme();
   return (
-    <Pressable onPress={onPress} style={[sharedStyles.chip, selected && sharedStyles.chipSelected]}>
-      <Text style={[sharedStyles.chipText, selected && sharedStyles.chipTextSelected]}>{label}</Text>
+    <Pressable
+      onPress={onPress}
+      style={[
+        sharedStyles.chip,
+        { backgroundColor: selected ? colors.primary : colors.surfaceMuted, borderColor: selected ? colors.primary : colors.border },
+      ]}
+    >
+      <Text style={[sharedStyles.chipText, { color: selected ? colors.primaryText : colors.textSecondary }]}>{label}</Text>
     </Pressable>
   );
 }
 
 export function PrimaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  const { colors } = useAppTheme();
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
         sharedStyles.primaryButton,
+        { backgroundColor: colors.primary },
         disabled && sharedStyles.buttonDisabled,
         pressed && !disabled && sharedStyles.buttonPressed,
       ]}
     >
-      <Text style={sharedStyles.primaryButtonText}>{label}</Text>
+      <Text style={[sharedStyles.primaryButtonText, { color: colors.primaryText }]}>{label}</Text>
     </Pressable>
   );
 }
 
 export function SecondaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  const { colors } = useAppTheme();
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       style={({ pressed }) => [
         sharedStyles.secondaryButton,
+        { backgroundColor: colors.surfaceMuted, borderColor: colors.border },
         disabled && sharedStyles.buttonDisabled,
         pressed && !disabled && sharedStyles.buttonPressed,
       ]}
     >
-      <Text style={sharedStyles.secondaryButtonText}>{label}</Text>
+      <Text style={[sharedStyles.secondaryButtonText, { color: colors.textSecondary }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -170,18 +280,23 @@ export function FormField({
   keyboardType?: React.ComponentProps<typeof TextInput>['keyboardType'];
   multiline?: boolean;
 }) {
+  const { colors } = useAppTheme();
   return (
     <View style={sharedStyles.formField}>
-      <Text style={sharedStyles.formLabel}>{label}</Text>
+      <Text style={[sharedStyles.formLabel, { color: colors.textSecondary }]}>{label}</Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#94a3b8"
+        placeholderTextColor={colors.placeholder}
         keyboardType={keyboardType}
         multiline={multiline}
         textAlignVertical={multiline ? 'top' : 'center'}
-        style={[sharedStyles.formInput, multiline && sharedStyles.formInputMultiline]}
+        style={[
+          sharedStyles.formInput,
+          { backgroundColor: colors.input, borderColor: colors.border, color: colors.text },
+          multiline && sharedStyles.formInputMultiline,
+        ]}
       />
     </View>
   );
@@ -200,6 +315,7 @@ export function ListScreen<T extends { id: string }>({
   action?: React.ReactNode;
 }) {
   const [refreshing, setRefreshing] = useState(false);
+  const { colors } = useAppTheme();
   return (
     <ScreenShell title={title} action={action}>
       <FlatList
@@ -208,7 +324,7 @@ export function ListScreen<T extends { id: string }>({
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         ListHeaderComponent={header}
-        ListEmptyComponent={<Text style={sharedStyles.empty}>{emptyText}</Text>}
+        ListEmptyComponent={<Text style={[sharedStyles.empty, { color: colors.textMuted }]}>{emptyText}</Text>}
         ListFooterComponent={footer}
         refreshing={refreshing}
         onRefresh={async () => {
@@ -240,6 +356,7 @@ export const sharedStyles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: '600' },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   statCard: { flexDirection: 'row', gap: 12, backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', flex: 1, minWidth: '47%' },
+  statCardPressable: { flex: 1, minWidth: '47%' },
   statIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#eff6ff' },
   statIconText: { fontSize: 18 },
   statLabel: { color: '#64748b', fontSize: 12 },
@@ -250,7 +367,7 @@ export const sharedStyles = StyleSheet.create({
   chipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
   chipText: { fontSize: 13, color: '#475569', fontWeight: '500' },
   chipTextSelected: { color: '#fff' },
-  chipRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
+  chipRow: { flexDirection: 'row', gap: 6, marginBottom: 8, flexWrap: 'wrap' },
   primaryButton: { backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   primaryButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   secondaryButton: { backgroundColor: '#f1f5f9', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e2e8f0' },

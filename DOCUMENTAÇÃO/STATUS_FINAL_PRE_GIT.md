@@ -33,8 +33,6 @@
 - 📊 **Dashboard**: Métricas e atividades recentes
 
 ### **🤖 Recursos Avançados:**
-- 🧠 **IA Integrada**: Gemini para PDFs e análise financeira
-- 📄 **Geração de PDF**: Puppeteer + Gemini
 - 📈 **Análise Financeira**: IA para projetos
 - 🔄 **Conversão**: Orçamentos → Projetos
 - 📊 **Relatórios**: Dashboards interativos
@@ -116,7 +114,6 @@ types.ts                        # ✅ Tipos TypeScript
 
 ### **✅ Funcionalidades:**
 - ✅ Todas as features implementadas
-- ✅ IA integrada (Gemini)
 - ✅ PDF generation funcionando
 - ✅ Análise financeira ativa
 
@@ -148,7 +145,6 @@ git add .
 git commit -m "feat: Sistema ERP/CRM completo com IA integrada
 
 - ✅ Sistema completo de gestão (clientes, orçamentos, projetos, estoque)
-- 🤖 IA integrada (Gemini) para PDFs e análise financeira
 - 🔐 Autenticação JWT robusta
 - 📊 Dashboard com métricas
 - 🧹 Código limpo e otimizado

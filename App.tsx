@@ -1,12 +1,15 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  View, Text, ActivityIndicator, StyleSheet, useColorScheme,
+} from 'react-native';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { authService } from './services/api';
+import { authService, settingsService } from './services/api';
+import { appThemes, ThemeMode, ThemeProvider } from './components/native/shared';
 
 // ─── Telas ────────────────────────────────────────────────────────────────────
 import LoginScreen        from './components/native/Login.native';
@@ -26,18 +29,6 @@ const Stack = createNativeStackNavigator();
 
 const TOKEN_KEY = 'token';
 const USER_KEY  = 'currentUser';
-
-const theme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    background: '#f5f7fb',
-    card:       '#ffffff',
-    text:       '#0f172a',
-    border:     '#e2e8f0',
-    primary:    '#2563eb',
-  },
-};
 
 const TAB_ICONS: Record<string, string> = {
   Dashboard:      '🏠',
@@ -92,44 +83,85 @@ function useAppSession() {
 }
 
 // ─── App principal (abas) ─────────────────────────────────────────────────────
-function MainApp({ onLogout }: { onLogout: () => Promise<void> | void }) {
+function MainApp({ onLogout, themeMode, setThemeMode }: {
+  onLogout: () => Promise<void> | void;
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+}) {
+  const systemScheme = useColorScheme();
+  const resolvedMode = themeMode === 'auto' ? (systemScheme === 'dark' ? 'dark' : 'light') : themeMode;
+  const colors = appThemes[resolvedMode];
+
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor:   '#2563eb',
-        tabBarInactiveTintColor: '#64748b',
-        tabBarStyle: { borderTopColor: '#e2e8f0' },
-        tabBarIcon: ({ color }) => (
-          <Text style={{ color, fontSize: 16 }}>{TAB_ICONS[route.name] ?? '•'}</Text>
-        ),
-      })}
-    >
-      <Tab.Screen name="Dashboard"    component={DashboardScreen} />
-      <Tab.Screen name="Clientes"     component={ClientsScreen} />
-      <Tab.Screen name="Orçamentos"   component={QuotesScreen} />
-      <Tab.Screen name="Financeiro"   component={FinanceiroScreen} />
-      <Tab.Screen name="Faturas"      component={InvoicesScreen} />
-      <Tab.Screen name="Projetos"     component={ProjectsScreen} />
-      <Tab.Screen name="Despesas"     component={ExpensesScreen} />
-      <Tab.Screen name="Estoque"      component={StockScreen} />
-      <Tab.Screen name="Configurações">
-        {() => <SettingsScreen onLogout={onLogout} />}
-      </Tab.Screen>
-    </Tab.Navigator>
+    <ThemeProvider value={{ mode: themeMode, resolvedMode, colors }}>
+      <Tab.Navigator
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textMuted,
+          tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
+          tabBarIcon: ({ color }) => (
+            <Text style={{ color, fontSize: 16 }}>{TAB_ICONS[route.name] ?? '•'}</Text>
+          ),
+        })}
+      >
+        <Tab.Screen name="Dashboard"    component={DashboardScreen} />
+        <Tab.Screen name="Clientes"     component={ClientsScreen} />
+        <Tab.Screen name="Orçamentos"   component={QuotesScreen} />
+        <Tab.Screen name="Financeiro"   component={FinanceiroScreen} />
+        <Tab.Screen name="Faturas"      component={InvoicesScreen} />
+        <Tab.Screen name="Projetos"     component={ProjectsScreen} />
+        <Tab.Screen name="Despesas"     component={ExpensesScreen} />
+        <Tab.Screen name="Estoque"      component={StockScreen} />
+        <Tab.Screen name="Configurações">
+          {() => <SettingsScreen onLogout={onLogout} themeMode={themeMode} onThemeChange={setThemeMode} />}
+        </Tab.Screen>
+      </Tab.Navigator>
+    </ThemeProvider>
   );
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const session = useAppSession();
+  const systemScheme = useColorScheme();
+  const [themeMode, setThemeMode] = useState<ThemeMode>('light');
+  const resolvedMode = themeMode === 'auto' ? (systemScheme === 'dark' ? 'dark' : 'light') : themeMode;
+  const colors = appThemes[resolvedMode];
+
+  useEffect(() => {
+    if (!session.authenticated) return;
+
+    settingsService.getSettings()
+      .then((settings) => {
+        if (settings?.theme === 'light' || settings?.theme === 'dark' || settings?.theme === 'auto') {
+          setThemeMode(settings.theme);
+        }
+      })
+      .catch(() => undefined);
+  }, [session.authenticated]);
+
+  const navigationTheme = useMemo(() => ({
+    ...DefaultTheme,
+    dark: resolvedMode === 'dark',
+    colors: {
+      ...DefaultTheme.colors,
+      background: colors.background,
+      card: colors.surface,
+      text: colors.text,
+      border: colors.border,
+      primary: colors.primary,
+    },
+  }), [colors, resolvedMode]);
 
   if (session.loading) {
     return (
       <SafeAreaProvider>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563eb" />
-        </View>
+        <ThemeProvider value={{ mode: themeMode, resolvedMode, colors }}>
+          <View style={[styles.center, { backgroundColor: colors.background }]}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        </ThemeProvider>
       </SafeAreaProvider>
     );
   }
@@ -142,25 +174,27 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer theme={theme}>
+      <NavigationContainer theme={navigationTheme}>
         {session.authenticated ? (
-          <MainApp onLogout={logout} />
+          <MainApp onLogout={logout} themeMode={themeMode} setThemeMode={setThemeMode} />
         ) : (
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Login">
-              {() => (
-                <LoginScreen
-                  onLogin={async () => {
-                    const token   = await AsyncStorage.getItem(TOKEN_KEY);
-                    const rawUser = await AsyncStorage.getItem(USER_KEY);
-                    const parsed  = rawUser ? JSON.parse(rawUser) : null;
-                    session.setAuthenticated(Boolean(token));
-                    session.setUser(parsed);
-                  }}
-                />
-              )}
-            </Stack.Screen>
-          </Stack.Navigator>
+          <ThemeProvider value={{ mode: themeMode, resolvedMode, colors }}>
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="Login">
+                {() => (
+                  <LoginScreen
+                    onLogin={async () => {
+                      const token   = await AsyncStorage.getItem(TOKEN_KEY);
+                      const rawUser = await AsyncStorage.getItem(USER_KEY);
+                      const parsed  = rawUser ? JSON.parse(rawUser) : null;
+                      session.setAuthenticated(Boolean(token));
+                      session.setUser(parsed);
+                    }}
+                  />
+                )}
+              </Stack.Screen>
+            </Stack.Navigator>
+          </ThemeProvider>
         )}
       </NavigationContainer>
     </SafeAreaProvider>
@@ -168,5 +202,5 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f7fb' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });

@@ -198,6 +198,38 @@ export default function QuotesScreen() {
     draft: quotes.filter((q) => q.status === QuoteStatus.Rascunho).length,
   }), [quotes]);
 
+  const updateQuoteStatus = async (quote: Quote, status: QuoteStatus) => {
+    try {
+      await quoteService.update(quote.id, {
+        quoteNumber: quote.quoteNumber,
+        clientId: quote.clientId,
+        issueDate: quote.issueDate,
+        expiryDate: quote.expiryDate,
+        tax: quote.tax,
+        notes: quote.notes ?? null,
+        status,
+        lineItems: quote.lineItems.map((item) => ({
+          stockItemId: item.stockItemId ?? null,
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: item.total,
+        })),
+      });
+      await load();
+      Alert.alert('Sucesso', 'Status do orçamento atualizado.');
+    } catch (e) {
+      Alert.alert('Erro ao atualizar status', safeErrorMessage(e));
+    }
+  };
+
+  const confirmStatusChange = (quote: Quote, status: QuoteStatus) => {
+    Alert.alert('Alterar status', `Mover ${quote.quoteNumber} para ${status}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Confirmar', onPress: () => void updateQuoteStatus(quote, status) },
+    ]);
+  };
+
   const convertQuote = async (quote: Quote) => {
     if (quote.status !== QuoteStatus.Aprovado) { Alert.alert('Orçamento não aprovado', 'Só é possível converter orçamentos aprovados.'); return; }
     if (projectQuoteIds.has(quote.id)) { Alert.alert('Projeto existente', 'Este orçamento já foi convertido em projeto.'); return; }
@@ -266,6 +298,11 @@ export default function QuotesScreen() {
                 <View style={sharedStyles.smallPill}><Text style={sharedStyles.smallPillLabel}>Total</Text><Text style={sharedStyles.smallPillValue}>{formatCurrency(item.total)}</Text></View>
               </View>
               {item.notes ? <Text style={sharedStyles.helper}>{item.notes}</Text> : null}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sharedStyles.chipRow}>
+                {Object.values(QuoteStatus).map((status) => (
+                  <Chip key={status} label={status} selected={item.status === status} onPress={() => confirmStatusChange(item, status)} />
+                ))}
+              </ScrollView>
               <View style={sharedStyles.actionRow}>
                 <SecondaryButton label="PDF" onPress={() => void loadPdfAndShare(item).catch((e) => Alert.alert('Erro ao gerar PDF', safeErrorMessage(e)))} />
                 <PrimaryButton label={linked ? 'Já virou projeto' : 'Converter'} disabled={linked || item.status !== QuoteStatus.Aprovado} onPress={() => void convertQuote(item)} />

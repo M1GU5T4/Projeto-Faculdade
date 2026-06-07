@@ -246,7 +246,6 @@ CREATE TABLE `invoice_line_items` (
 CREATE TABLE `user_settings` (
     `id` VARCHAR(191) NOT NULL,
     `userId` VARCHAR(191) NOT NULL,
-    `geminiApiKey` VARCHAR(191) NULL,
     `theme` VARCHAR(191) NULL DEFAULT 'light',
     `notifications` JSON NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

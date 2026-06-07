@@ -178,6 +178,8 @@ Se for usar apenas o **simulador** (sem celular físico), pode deixar `localhost
 EXPO_PUBLIC_API_URL=http://localhost:3002/api
 ```
 
+> 💡 **Dica:** Se o `.env` tiver `localhost`, o app detecta automaticamente o IP da sua máquina pelo Expo. Você só precisa colocar o IP manualmente se o celular não conseguir conectar.
+
 ### 3. Iniciar o app
 
 ```bash

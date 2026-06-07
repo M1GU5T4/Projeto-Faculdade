@@ -79,7 +79,6 @@ DATABASE_URL="mysql://root:@localhost:3306/erp_crm"
 JWT_SECRET="seu_jwt_secret_super_seguro_12345_change_this_in_production"
 PORT=3002
 NODE_ENV=development
-GEMINI_API_KEY="AIzaSyAsdq-ftBTghKWamEsFk6J5betb53Cy5qM"
 ADMIN_EMAIL="admin@heseguranca.com"
 ADMIN_PASSWORD="admin123"
 ADMIN_NAME="Administrador HE Segurança"
