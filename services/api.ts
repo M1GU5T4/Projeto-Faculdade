@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const TOKEN_KEY = 'token';
 const USER_KEY = 'currentUser';
 const DEFAULT_API_PORT = '3002';
+const API_TIMEOUT_MS = 10000;
 const rawConfiguredApiUrl = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
 const expoHost = Constants.executionEnvironment !== 'standalone'
   ? (Constants.expoConfig?.hostUri ?? Constants.platform?.hostUri ?? Constants.linkingUri)
@@ -20,6 +21,7 @@ export const API_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl}/ap
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: API_TIMEOUT_MS,
 });
 
 const getStoredToken = async () => AsyncStorage.getItem(TOKEN_KEY);
@@ -41,6 +43,14 @@ const clearSession = async () => {
 
 const normalizeError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
+    if (error.code === 'ECONNABORTED') {
+      return new Error('A API demorou para responder. Verifique se o backend está rodando e tente novamente.');
+    }
+
+    if (error.message === 'Network Error' || !error.response) {
+      return new Error(`Não foi possível conectar à API em ${API_URL}. Verifique se o backend está rodando na mesma rede.`);
+    }
+
     const apiMessage = error.response?.data?.error || error.response?.data?.message || error.message;
     return new Error(apiMessage || 'Erro ao comunicar com a API.');
   }
