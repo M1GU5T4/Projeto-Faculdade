@@ -2,7 +2,7 @@ FROM node:18-alpine
 
 WORKDIR /app/backend
 
-RUN apk add --no-cache curl git bash openssl openssl-dev libc6-compat
+RUN apk add --no-cache curl git bash openssl openssl-dev libc6-compat mysql-client netcat-openbsd
 
 COPY backend/package*.json ./
 RUN npm ci
@@ -12,10 +12,15 @@ RUN npx prisma generate
 
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 RUN chown -R nodejs:nodejs /app
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 USER nodejs
 
 EXPOSE 3002
 
 ENV NODE_ENV=production
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["npx", "tsx", "src/server.ts"]

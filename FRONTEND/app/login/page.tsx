@@ -43,7 +43,6 @@ export default function LoginPage() {
         await authService.login(email.trim(), password);
       }
       router.push('/dashboard');
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao autenticar.');
     } finally {

@@ -58,7 +58,13 @@ const normalizeError = (error: unknown) => {
 api.interceptors.response.use(
   (r) => r,
   (error: AxiosError) => {
-    if (error.response?.status === 401 || error.response?.status === 403) clearSession();
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      clearSession();
+      // Redireciona para login apenas no browser e se não estiver já na página de login
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    }
     return Promise.reject(normalizeError(error));
   }
 );

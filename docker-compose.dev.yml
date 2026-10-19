@@ -1,0 +1,62 @@
+version: '3.8'
+
+# Compose de desenvolvimento — sobe só MySQL + Backend
+# O frontend roda local com: cd FRONTEND && npm run dev
+#
+# Como usar:
+#   docker compose -f docker-compose.dev.yml up
+#   cd FRONTEND && npm run dev
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: orcamento_mysql_dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE:      erp_crm
+      MYSQL_USER:          erp_user
+      MYSQL_PASSWORD:      erp_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: orcamento_backend_dev
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "3002:3002"
+    environment:
+      DATABASE_URL:   "mysql://erp_user:erp_pass@mysql:3306/erp_crm"
+      JWT_SECRET:     "dev_secret_only_local"
+      ADMIN_EMAIL:    "admin@admin.com"
+      ADMIN_PASSWORD: "admin"
+      ADMIN_NAME:     "Administrador"
+      FRONTEND_URL:   "http://localhost:3000"
+      NODE_ENV:       production
+      PORT:           3002
+      RUN_SEED:       "false"
+    networks:
+      - app-network
+
+volumes:
+  mysql_dev_data:
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
