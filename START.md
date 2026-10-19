@@ -1,315 +1,157 @@
-# 🚀 Guia de Instalação — Sistema de Gestão Empresarial
+# Guia de Instalação — Sistema de Gestão Empresarial
 
-Este guia explica como configurar e rodar o projeto do zero após clonar o repositório.
-
----
-
-## 📋 Pré-requisitos
-
-Antes de começar, instale as ferramentas abaixo no seu computador.
+Sistema ERP/CRM web construído com Next.js, Node.js/Express, Prisma e MySQL.
 
 ---
 
-### 1. Node.js (versão 18 ou superior)
+## Pré-requisitos
 
-Acesse [https://nodejs.org](https://nodejs.org) e baixe a versão **LTS**.
+- [Docker](https://www.docker.com/products/docker-desktop) e Docker Compose
+- [Node.js 18+](https://nodejs.org) (apenas para rodar o frontend em modo dev)
+- [Git](https://git-scm.com)
 
-Para verificar se já está instalado:
+---
+
+## Subir o sistema completo (produção local)
+
+Sobe banco de dados, backend e frontend com um único comando:
+
 ```bash
-node -v
-npm -v
-```
-Ambos devem retornar uma versão. Ex: `v20.11.0` e `10.2.4`.
-
----
-
-### 2. Git
-
-Acesse [https://git-scm.com](https://git-scm.com) e instale.
-
-Para verificar:
-```bash
-git --version
+docker compose up --build
 ```
 
----
+Na primeira execução demora alguns minutos (build das imagens). Nas próximas, usa cache e sobe em segundos.
 
-### 3. MySQL (versão 8 ou superior)
-
-O backend usa MySQL como banco de dados.
-
-- **Windows/macOS**: Baixe o instalador em [https://dev.mysql.com/downloads/mysql](https://dev.mysql.com/downloads/mysql)
-- **macOS com Homebrew**:
-  ```bash
-  brew install mysql
-  brew services start mysql
-  ```
-- **Linux (Ubuntu/Debian)**:
-  ```bash
-  sudo apt update
-  sudo apt install mysql-server
-  sudo systemctl start mysql
-  ```
-
-Durante a instalação, anote o **usuário** (padrão: `root`) e a **senha** que você definir.
+Acesse em: **http://localhost**
 
 ---
 
-### 4. Expo Go (no celular)
+## Modo desenvolvimento (recomendado para alterações no frontend)
 
-Para rodar o app no seu smartphone:
+Sobe apenas o banco e o backend via Docker, e o frontend roda local com hot reload:
 
-- **iPhone**: Baixe o **Expo Go** na [App Store](https://apps.apple.com/app/expo-go/id982107779)
-- **Android**: Baixe o **Expo Go** no [Google Play](https://play.google.com/store/apps/details?id=host.exp.exponent)
-
-> ⚠️ O app no celular e o projeto precisam estar na **mesma rede Wi-Fi**.
-
----
-
-## 📥 Clonando o Repositório
-
+**Terminal 1 — banco + backend:**
 ```bash
-git clone https://github.com/seu-usuario/seu-repositorio.git
-cd seu-repositorio
+docker compose -f docker-compose.dev.yml up --build
 ```
 
----
-
-## ⚙️ Configuração do Backend
-
-### 1. Entrar na pasta do backend e instalar dependências
-
+**Terminal 2 — frontend com hot reload:**
 ```bash
-cd backend
+cd FRONTEND
 npm install
+npm run dev
 ```
 
-### 2. Criar o arquivo de variáveis de ambiente
+Acesse em: **http://localhost:3000**
 
-```bash
-cp .env.example .env
-```
+Qualquer alteração nos arquivos do `FRONTEND/` reflete no browser instantaneamente, sem precisar rebuildar o Docker.
 
-Abra o arquivo `backend/.env` em qualquer editor de texto e preencha com os dados do seu MySQL:
+---
 
-```env
-DATABASE_URL="mysql://root:SUA_SENHA@localhost:3306/erp_crm"
-JWT_SECRET="uma_chave_secreta_qualquer_mude_isso"
-PORT=3002
-NODE_ENV=development
-```
+## Primeiro acesso — criar usuário administrador
 
-> Substitua `SUA_SENHA` pela senha do seu MySQL. Se não tiver senha, deixe vazio: `mysql://root:@localhost:3306/erp_crm`
+O sistema não cria usuário automaticamente. Siga os passos:
 
-### 3. Criar o banco de dados no MySQL
+**1. Abra a tela de cadastro**
 
-Acesse o MySQL pelo terminal:
+Acesse `http://localhost:3000/login` (ou `http://localhost` no modo produção) e clique em **"Não tenho conta — Criar"**.
 
-```bash
-mysql -u root -p
-```
+**2. Cadastre seu usuário**
 
-Dentro do MySQL, execute:
+Preencha nome, e-mail e senha e clique em **Criar conta**.
+
+**3. Eleve o privilégio para ADMIN**
+
+O usuário criado pela tela de cadastro tem role `USER` por padrão. Para ter acesso completo ao sistema, execute o comando abaixo no banco de dados, substituindo pelo e-mail que você cadastrou:
 
 ```sql
-CREATE DATABASE erp_crm;
-EXIT;
+UPDATE users
+SET role = 'ADMIN'
+WHERE email = 'seu_email_cadastrado_aqui';
 ```
 
-### 4. Rodar as migrations (criar as tabelas)
-
-De volta no terminal, ainda dentro da pasta `backend`:
+Você pode executar esse comando:
+- No **DBeaver** conectando em `localhost:3306` com usuário `erp_user` / senha `erp_pass` / banco `erp_crm`
+- Ou pelo terminal:
 
 ```bash
-npx prisma migrate deploy
+docker compose -f docker-compose.dev.yml exec mysql \
+  mysql -u erp_user -perp_pass erp_crm \
+  -e "UPDATE users SET role = 'ADMIN' WHERE email = 'seu_email_aqui';"
 ```
 
-Você verá as tabelas sendo criadas. Se tudo correr bem, aparecerá uma mensagem de sucesso.
+**4. Faça login normalmente**
 
-### 5. Iniciar o backend
-
-```bash
-npm start
-```
-
-O servidor vai iniciar na porta `3002`. Você verá no terminal:
-```
-🚀 Servidor rodando na porta 3002
-```
-
-> Deixe este terminal aberto. O backend precisa estar rodando para o app funcionar.
+Com o e-mail e senha que você cadastrou.
 
 ---
 
-## 📱 Configuração do Frontend (App Mobile)
+## Variáveis de ambiente
 
-Abra um **novo terminal** e volte para a pasta raiz do projeto:
-
-```bash
-cd ..
-```
-
-### 1. Instalar dependências
-
-```bash
-npm install
-```
-
-### 2. Criar o arquivo de variáveis de ambiente
-
-```bash
-cp .env.example .env
-```
-
-Abra o `.env` na raiz e configure a URL do backend.
-
-Se for rodar no **celular físico**, substitua `localhost` pelo IP do seu computador na rede Wi-Fi:
-
+### Backend (`backend/.env`)
 ```env
-EXPO_PUBLIC_API_URL=http://192.168.1.100:3002/api
+DATABASE_URL="mysql://erp_user:erp_pass@localhost:3306/erp_crm"
+JWT_SECRET="troque_por_uma_chave_segura_em_producao"
+PORT=3002
+NODE_ENV=development
+ADMIN_EMAIL="seu@email.com"
+ADMIN_PASSWORD="sua_senha"
 ```
 
-> Para descobrir o IP do seu computador:
-> - **Windows**: `ipconfig` no terminal, procure "Endereço IPv4"
-> - **macOS/Linux**: `ifconfig` ou `ip addr`, procure o IP da interface Wi-Fi (ex: `en0` ou `wlan0`)
+Copie o modelo: `cp backend/.env.example backend/.env`
 
-Se for usar apenas o **simulador** (sem celular físico), pode deixar `localhost`:
+### Frontend (`FRONTEND/.env.local`)
 ```env
-EXPO_PUBLIC_API_URL=http://localhost:3002/api
+NEXT_PUBLIC_API_URL=http://localhost:3002
 ```
 
-> 💡 **Dica:** Se o `.env` tiver `localhost`, o app detecta automaticamente o IP da sua máquina pelo Expo. Você só precisa colocar o IP manualmente se o celular não conseguir conectar.
-
-### 3. Iniciar o app
-
-```bash
-npx expo start --clear
-```
-
-Um QR Code aparecerá no terminal.
+Copie o modelo: `cp FRONTEND/.env.example FRONTEND/.env.local`
 
 ---
 
-## 📲 Abrindo no Celular
-
-1. Abra o app **Expo Go** no seu celular
-2. Toque em **"Scan QR Code"**
-3. Aponte a câmera para o QR Code no terminal
-4. O app vai carregar automaticamente
-
----
-
-## 🔑 Acesso ao Sistema
-
-O sistema possui um usuário de demonstração que funciona **sem precisar de banco de dados**:
-
-| Campo | Valor |
-|-------|-------|
-| Email | `admin@admin.com` |
-| Senha | `admin` |
-
----
-
-## 🐳 Alternativa: Rodar com Docker
-
-Se preferir não instalar MySQL manualmente, use o Docker:
-
-### Pré-requisito: instalar Docker
-Acesse [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop) e instale o Docker Desktop.
-
-### Subir tudo com um comando
-
-Na raiz do projeto:
-
-```bash
-docker-compose up -d
-```
-
-Isso vai subir o banco MySQL e o backend automaticamente. Depois é só rodar o frontend:
-
-```bash
-npx expo start --clear
-```
-
----
-
-## 🛠️ Solução de Problemas Comuns
-
-**"Network Error" ao fazer login no celular**
-> O celular não consegue acessar `localhost`. Configure o IP da sua máquina no `.env` conforme explicado acima.
-
-**"Cannot find module 'babel-preset-expo'"**
-```bash
-npm install babel-preset-expo --save-dev
-```
-
-**"Project is incompatible with this version of Expo Go"**
-> O Expo Go do celular está em versão diferente do projeto. Atualize o projeto:
-```bash
-npx expo install expo@~54.0.34
-npx expo install --fix
-```
-
-**Erro de conexão com MySQL**
-> Verifique se o MySQL está rodando e se a senha no `backend/.env` está correta.
-```bash
-# Linux/macOS
-sudo systemctl status mysql
-
-# macOS com Homebrew
-brew services list
-```
-
-**Porta 3002 já em uso**
-> Mude a porta no `backend/.env`:
-```env
-PORT=3003
-```
-E atualize o `.env` do frontend com a nova porta.
-
----
-
-## 📁 Estrutura do Projeto
+## Estrutura do projeto
 
 ```
 /
-├── App.tsx                  # Entrada do app mobile
-├── components/
-│   └── native/              # Componentes React Native
-├── services/
-│   └── api.ts               # Chamadas à API
-├── types.ts                 # Tipos TypeScript
+├── FRONTEND/                # Next.js 14 — interface web
+│   ├── app/                 # Rotas (App Router)
+│   ├── components/ui/       # Componentes shadcn/ui
+│   └── services/api.ts      # Chamadas à API
 ├── backend/
-│   ├── src/                 # Código do servidor Node.js
-│   ├── prisma/              # Schema e migrations do banco
-│   └── .env.example         # Modelo de variáveis do backend
-├── .env.example             # Modelo de variáveis do frontend
-└── docker-compose.yml       # Configuração Docker
+│   ├── src/                 # Servidor Node.js/Express
+│   ├── prisma/              # Schema e migrations MySQL
+│   └── .env.example         # Modelo de variáveis
+├── Dockerfile.backend       # Imagem do backend
+├── Dockerfile.frontend      # Imagem do frontend (Next.js standalone)
+├── docker-compose.yml       # Produção — todos os serviços
+├── docker-compose.dev.yml   # Dev — só banco e backend
+└── nginx.conf               # Proxy reverso
 ```
 
 ---
 
-## 📞 Resumo Rápido
+## Solução de problemas
 
+**Backend em loop reiniciando**
 ```bash
-# Clone o projeto
-git clone https://github.com/seu-usuario/seu-repositorio.git
-cd seu-repositorio
+docker compose -f docker-compose.dev.yml logs backend
+```
+Verifique o erro nos logs e se o MySQL está healthy.
 
-# Backend
-cd backend
-npm install
-cp .env.example .env        # edite com seus dados do MySQL
-npx prisma migrate deploy
-npm start
+**Erro de conexão com a API no frontend**
+Certifique-se de que o arquivo `FRONTEND/.env.local` existe com `NEXT_PUBLIC_API_URL=http://localhost:3002` e que reiniciou o `npm run dev` após criá-lo.
 
-# Frontend (novo terminal)
-cd ..
-npm install
-cp .env.example .env        # edite com o IP da sua máquina
-npx expo start --clear
+**Porta 3306 já em uso**
+Você tem MySQL instalado localmente rodando na mesma porta. Pare o serviço local:
+```bash
+# Linux
+sudo systemctl stop mysql
+
+# macOS
+brew services stop mysql
 ```
 
----
-
-Fazendo Programa
+**Rebuild só do backend**
+```bash
+docker compose -f docker-compose.dev.yml up --build backend
+```
