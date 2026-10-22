@@ -4,8 +4,18 @@ const TOKEN_KEY   = 'token';
 const USER_KEY    = 'currentUser';
 const API_TIMEOUT = 10000;
 
-// No browser usamos variável de ambiente; em dev o Next.js faz rewrite de /api/* para o backend
-const BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002') + '/api';
+// ─── URL base da API ─────────────────────────────────────────────────────────
+// Dev local (npm run dev):   NEXT_PUBLIC_API_URL=http://localhost:3002  →  http://localhost:3002/api
+// Docker produção (nginx):   NEXT_PUBLIC_API_URL não definido           →  /api  (relativo ao host)
+//
+// Com URL relativa, o browser usa o mesmo host/porta da página — funciona
+// independente do IP ou domínio em que o sistema estiver hospedado.
+
+const configuredUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
+
+const BASE_URL = configuredUrl
+  ? `${configuredUrl}/api`   // dev: aponta direto pro backend
+  : '/api';                  // produção: relativo ao nginx
 
 export const API_URL = BASE_URL;
 
