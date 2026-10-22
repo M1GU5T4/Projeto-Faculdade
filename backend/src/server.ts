@@ -15,6 +15,7 @@ import projectRoutes from './routes/projects';
 import expenseRoutes from './routes/expenses';
 import dashboardRoutes from './routes/dashboard';
 import stockRoutes from './routes/stock';
+import stockImportRoutes from './routes/stockImport';
 import settingsRoutes from './routes/settings-simple';
 
 dotenv.config();
@@ -101,6 +102,7 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/stock', stockRoutes);
+app.use('/api/stock/import', stockImportRoutes);
 
 // Middleware de tratamento de erros (deve ser o último)
 app.use(errorHandler);

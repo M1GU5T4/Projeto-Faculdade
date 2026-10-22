@@ -1,7 +1,0 @@
-{
-  "name": "Sistema de Gestão Empresarial",
-  "description": "ERP/CRM mobile para Android e iOS",
-  "platform": "mobile",
-  "framework": "expo",
-  "version": "2.1.0"
-}
