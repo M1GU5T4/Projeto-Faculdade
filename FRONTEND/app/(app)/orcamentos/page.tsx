@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { API_URL, clientService, projectService, quoteService } from '@/services/api';
-import type { Client, Project, Quote, QuoteLineItem } from '@/types';
+import { API_URL, clientService, projectService, quoteService, stockService } from '@/services/api';
+import type { Client, Project, Quote, QuoteLineItem, StockItem } from '@/types';
 import { QuoteStatus } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -46,11 +47,18 @@ const statusStyle = (s: string) => ({
 
 // ─── Tipos internos ────────────────────────────────────────────────────────────
 
-type LineDraft = { id: string; description: string; quantity: string; unitPrice: string };
+type LineDraft = {
+  id: string;
+  kind: 'stock' | 'labor' | null;
+  stockItemId: string;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+};
 type FormState = { quoteNumber: string; clientId: string; issueDate: string; expiryDate: string; tax: string; notes: string; lineItems: LineDraft[] };
 
 function newDraft(): LineDraft {
-  return { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, description: '', quantity: '1', unitPrice: '0' };
+  return { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, kind: null, stockItemId: '', description: '', quantity: '1', unitPrice: '' };
 }
 
 function defaultForm(clients: Client[]): FormState {
@@ -98,16 +106,53 @@ function QuoteCreateModal({ open, clients, onClose, onSaved }: {
 }) {
   const [form, setForm]           = useState<FormState>(defaultForm(clients));
   const [clientSearch, setClientSearch] = useState('');
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [loadingStock, setLoadingStock] = useState(false);
   const [saving, setSaving]       = useState(false);
 
   useEffect(() => {
-    if (open) { setForm(defaultForm(clients)); setClientSearch(''); setSaving(false); }
+    if (!open) return;
+    let active = true;
+    setForm(defaultForm(clients));
+    setClientSearch('');
+    setSaving(false);
+    setLoadingStock(true);
+    stockService.getItems({ availableOnly: true })
+      .then((items: StockItem[]) => {
+        if (active) setStockItems(items.filter((item) => item.isActive && item.quantity > 0));
+      })
+      .catch((error) => {
+        if (active) toast({ title: 'Erro ao carregar itens do estoque', description: safeError(error), variant: 'destructive' });
+      })
+      .finally(() => { if (active) setLoadingStock(false); });
+    return () => { active = false; };
   }, [open, clients]);
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const updateLine = (id: string, field: keyof Omit<LineDraft, 'id'>, val: string) =>
     setForm((f) => ({ ...f, lineItems: f.lineItems.map((l) => l.id === id ? { ...l, [field]: val } : l) }));
+
+  const selectLineItem = (lineId: string, value: string) => {
+    if (value === 'labor') {
+      setForm((current) => ({
+        ...current,
+        lineItems: current.lineItems.map((line) => line.id === lineId
+          ? { ...line, kind: 'labor', stockItemId: '', description: 'Mão de obra', quantity: '1', unitPrice: '' }
+          : line),
+      }));
+      return;
+    }
+
+    const stockItem = stockItems.find((item) => item.id === value);
+    if (!stockItem) return;
+    setForm((current) => ({
+      ...current,
+      lineItems: current.lineItems.map((line) => line.id === lineId
+        ? { ...line, kind: 'stock', stockItemId: stockItem.id, description: stockItem.name, quantity: '1', unitPrice: String(stockItem.price) }
+        : line),
+    }));
+  };
 
   const filteredClients = useMemo(() => {
     const q = clientSearch.trim().toLowerCase();
@@ -126,11 +171,23 @@ function QuoteCreateModal({ open, clients, onClose, onSaved }: {
     if (!clients.length) { toast({ title: 'Sem clientes', description: 'Cadastre um cliente antes.', variant: 'destructive' }); return; }
     if (!form.quoteNumber.trim() || !form.clientId) { toast({ title: 'Campos obrigatórios', description: 'Preencha número e selecione o cliente.', variant: 'destructive' }); return; }
 
-    const lineItems = form.lineItems
-      .map((l) => ({ description: l.description.trim(), quantity: Number(l.quantity), unitPrice: Number(l.unitPrice) }))
-      .filter((l) => l.description && l.quantity > 0 && l.unitPrice > 0);
+    const selectedLines = form.lineItems.filter((line) => line.kind);
+    if (!selectedLines.length) { toast({ title: 'Itens inválidos', description: 'Adicione um produto do estoque ou uma mão de obra.', variant: 'destructive' }); return; }
 
-    if (!lineItems.length) { toast({ title: 'Itens inválidos', description: 'Adicione ao menos um item com descrição, quantidade e preço.', variant: 'destructive' }); return; }
+    const hasInvalidLine = selectedLines.some((line) =>
+      !line.description.trim() || Number(line.quantity) <= 0 || Number(line.unitPrice) <= 0
+    );
+    if (hasInvalidLine) {
+      toast({ title: 'Revise os itens', description: 'Informe descrição, quantidade e valor maior que zero para cada item.', variant: 'destructive' });
+      return;
+    }
+
+    const lineItems = selectedLines.map((line) => ({
+      stockItemId: line.kind === 'stock' ? line.stockItemId : null,
+      description: line.description.trim(),
+      quantity: Number(line.quantity),
+      unitPrice: Number(line.unitPrice),
+    }));
 
     setSaving(true);
     try {
@@ -142,7 +199,7 @@ function QuoteCreateModal({ open, clients, onClose, onSaved }: {
         tax:         Number(form.tax || 0),
         notes:       form.notes.trim() || null,
         status:      QuoteStatus.Rascunho,
-        lineItems:   lineItems.map((l) => ({ ...l, total: l.quantity * l.unitPrice })),
+        lineItems:   lineItems.map((line) => ({ ...line, total: line.quantity * line.unitPrice })),
       });
       await onSaved();
       onClose();
@@ -238,19 +295,42 @@ function QuoteCreateModal({ open, clients, onClose, onSaved }: {
                     </button>
                   )}
                 </div>
-                <Input
-                  placeholder="Descrição do serviço ou produto"
-                  value={item.description}
-                  onChange={(e) => updateLine(item.id, 'description', e.target.value)}
-                />
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Produto ou serviço</Label>
+                  <Select value={item.kind === 'labor' ? 'labor' : item.stockItemId} onValueChange={(value) => selectLineItem(item.id, value)}>
+                    <SelectTrigger><SelectValue placeholder={loadingStock ? 'Carregando estoque...' : 'Selecione um item'} /></SelectTrigger>
+                    <SelectContent>
+                      {stockItems.map((stockItem) => (
+                        <SelectItem key={stockItem.id} value={stockItem.id}>
+                          {stockItem.name} · {stockItem.quantity} {stockItem.unit} · {formatCurrency(stockItem.price)}
+                        </SelectItem>
+                      ))}
+                      <SelectSeparator />
+                      <SelectItem value="labor">Mão de obra · valor livre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!loadingStock && stockItems.length === 0 && (
+                    <p className="text-xs text-muted-foreground">Sem produtos com saldo. Você ainda pode adicionar mão de obra.</p>
+                  )}
+                </div>
+                {item.kind && (
+                  <Input
+                    placeholder={item.kind === 'labor' ? 'Descrição do serviço' : 'Produto do estoque'}
+                    value={item.description}
+                    readOnly={item.kind === 'stock'}
+                    onChange={(e) => updateLine(item.id, 'description', e.target.value)}
+                  />
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Quantidade</Label>
-                    <Input type="number" min="0" step="0.01" value={item.quantity} onChange={(e) => updateLine(item.id, 'quantity', e.target.value)} />
+                    <Label className="text-xs">
+                      Quantidade{item.kind === 'stock' ? ` (em estoque: ${stockItems.find((stockItem) => stockItem.id === item.stockItemId)?.quantity ?? 0})` : ''}
+                    </Label>
+                    <Input type="number" min="0" max={item.kind === 'stock' ? stockItems.find((stockItem) => stockItem.id === item.stockItemId)?.quantity : undefined} step="0.01" value={item.quantity} disabled={!item.kind} onChange={(e) => updateLine(item.id, 'quantity', e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Preço unitário (R$)</Label>
-                    <Input type="number" min="0" step="0.01" value={item.unitPrice} onChange={(e) => updateLine(item.id, 'unitPrice', e.target.value)} />
+                    <Label className="text-xs">Valor unitário (R$)</Label>
+                    <Input type="number" min="0" step="0.01" value={item.unitPrice} disabled={item.kind !== 'labor'} onChange={(e) => updateLine(item.id, 'unitPrice', e.target.value)} placeholder={item.kind === 'labor' ? 'Informe o valor' : undefined} />
                   </div>
                 </div>
                 <p className="text-right text-xs font-semibold text-muted-foreground">

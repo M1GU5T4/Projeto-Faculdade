@@ -177,8 +177,13 @@ router.delete('/categories/:id', async (req, res) => {
 
 router.get('/items', async (req, res) => {
   try {
-    const { categoryId, type, lowStock, search } = req.query;
+    const { categoryId, type, lowStock, search, availableOnly } = req.query;
     const where: Record<string, unknown> = {};
+
+    if (availableOnly === 'true') {
+      where.isActive = true;
+      where.quantity = { gt: 0 };
+    }
 
     if (categoryId) {
       where.categoryId = categoryId as string;

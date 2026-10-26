@@ -26,6 +26,15 @@ const quoteSchema = z.object({
   notes: z.string().nullable().optional(), // Campo para observações
 });
 
+const projectConversionSchema = z.object({
+  projectName: z.string().min(2).optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  description: z.string().optional(),
+  budget: z.number().positive().optional(),
+  progress: z.number().min(0).max(100).optional(),
+});
+
 router.use(authenticateToken);
 
 // Listar todos os orçamentos
@@ -105,6 +114,28 @@ router.post('/', async (req, res) => {
 
     if (existingQuote) {
       return res.status(400).json({ error: 'Número do orçamento já existe' });
+    }
+
+    const requestedStock = new Map<string, number>();
+    for (const item of data.lineItems) {
+      if (item.stockItemId) {
+        requestedStock.set(item.stockItemId, (requestedStock.get(item.stockItemId) || 0) + item.quantity);
+      }
+    }
+
+    if (requestedStock.size > 0) {
+      const stockItems = await prisma.stockItem.findMany({
+        where: { id: { in: [...requestedStock.keys()] }, isActive: true, quantity: { gt: 0 } },
+        select: { id: true, quantity: true },
+      });
+      const availableById = new Map(stockItems.map((item) => [item.id, item.quantity]));
+      const hasUnavailableItem = [...requestedStock].some(([id, quantity]) =>
+        (availableById.get(id) ?? 0) < quantity
+      );
+
+      if (hasUnavailableItem) {
+        return res.status(400).json({ error: 'Um ou mais itens estão inativos ou sem quantidade suficiente em estoque.' });
+      }
     }
 
     // Calcular totais
@@ -563,7 +594,7 @@ router.get('/:id/pdf', async (req, res) => {
 router.post('/:id/convert-to-project', async (req, res) => {
   try {
     const { id } = req.params;
-    const { projectName, startDate, endDate, description } = req.body;
+    const { projectName, startDate, endDate, description, budget, progress } = projectConversionSchema.parse(req.body);
 
     // Verificar se o orçamento existe e está aprovado
     const quote = await prisma.quote.findUnique({
@@ -606,10 +637,10 @@ router.post('/:id/convert-to-project', async (req, res) => {
         quoteId: quote.id,
         startDate: new Date(startDate || new Date()),
         endDate: endDate ? new Date(endDate) : null,
-        status: 'NAO_INICIADO',
+        status: progress === 100 ? 'CONCLUIDO' : (progress ?? 0) > 0 ? 'EM_ANDAMENTO' : 'NAO_INICIADO',
         description: description || quote.notes || `Projeto criado a partir do orçamento ${quote.quoteNumber}`,
-        budget: quote.total,
-        progress: 0,
+        budget: budget ?? quote.total,
+        progress: progress ?? 0,
         // Criar tarefas baseadas nos itens do orçamento
         tasks: {
           create: quote.lineItems.map((item, index) => ({
@@ -643,6 +674,9 @@ router.post('/:id/convert-to-project', async (req, res) => {
     });
 
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0].message });
+    }
     console.error('Erro ao converter orçamento em projeto:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }

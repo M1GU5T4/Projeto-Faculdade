@@ -1,20 +1,23 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { clientService, projectService } from '@/services/api';
-import type { Client, Project, ProjectExpense } from '@/types';
-import { ProjectStatus } from '@/types';
+import { clientService, projectService, quoteService } from '@/services/api';
+import type { Client, Project, ProjectExpense, Quote } from '@/types';
+import { ProjectStatus, QuoteStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
 import {
   FolderKanban, CheckSquare, Clock, AlertTriangle,
-  RefreshCw, Search, X, User, Calendar, Tag,
-  TrendingDown, BarChart3, Wallet,
+  RefreshCw, Search, X, User, Calendar, Tag, Plus, ArrowRight,
+  TrendingDown, BarChart3, Wallet, Pencil,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -247,10 +250,12 @@ function ProjectSummaryModal({ project, clientName, onClose }: {
 
 // ─── Card de projeto ──────────────────────────────────────────────────────────
 
-function ProjectCard({ project, clientName, onSummary }: {
-  project: Project; clientName: string; onSummary: () => void;
+function ProjectCard({ project, clientName, onSummary, onEdit }: {
+  project: Project; clientName: string; onSummary: () => void; onEdit: () => void;
 }) {
-  const progress = project.taskProgress ?? project.progress ?? 0;
+  const progress = project.progress > 0 || !project.tasks?.length
+    ? project.progress ?? 0
+    : project.taskProgress ?? project.progress ?? 0;
   const isOverdue = project.isOverdue;
 
   return (
@@ -325,12 +330,257 @@ function ProjectCard({ project, clientName, onSummary }: {
         </div>
 
         {/* Ação */}
-        <Button variant="outline" size="sm" className="w-full" onClick={onSummary}>
-          <BarChart3 className="mr-2 h-3.5 w-3.5" />
-          Ver resumo
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="flex-1" onClick={onSummary}>
+            <BarChart3 className="mr-2 h-3.5 w-3.5" />
+            Ver resumo
+          </Button>
+          <Button variant="outline" size="icon" onClick={onEdit} title="Editar projeto" aria-label="Editar projeto">
+            <Pencil className="h-4 w-4" />
+          </Button>
+        </div>
       </CardContent>
     </Card>
+  );
+}
+
+type ProjectSource = 'manual' | 'quote';
+type ProjectDraft = {
+  name: string;
+  clientId: string;
+  quoteId: string;
+  startDate: string;
+  endDate: string;
+  description: string;
+  budget: string;
+  progress: string;
+};
+
+const newProjectDraft = (): ProjectDraft => ({
+  name: '',
+  clientId: '',
+  quoteId: '',
+  startDate: new Date().toISOString().slice(0, 10),
+  endDate: '',
+  description: '',
+  budget: '',
+  progress: '0',
+});
+
+const statusForProgress = (progress: number) =>
+  progress >= 100 ? ProjectStatus.Concluido : progress > 0 ? ProjectStatus.EmAndamento : ProjectStatus.NaoIniciado;
+
+function ProjectCreateModal({ open, project, initialSource, clients, quotes, onClose, onSaved }: {
+  open: boolean;
+  project: Project | null;
+  initialSource: ProjectSource;
+  clients: Client[];
+  quotes: Quote[];
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [source, setSource] = useState<ProjectSource>('manual');
+  const [form, setForm] = useState<ProjectDraft>(newProjectDraft);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setSource(project ? 'manual' : initialSource);
+      setForm(project ? {
+        name: project.name,
+        clientId: project.clientId,
+        quoteId: project.quoteId ?? '',
+        startDate: project.startDate.slice(0, 10),
+        endDate: project.endDate?.slice(0, 10) ?? '',
+        description: project.description ?? '',
+        budget: project.budget ? String(project.budget) : '',
+        progress: String(project.progress > 0 || !project.tasks?.length ? project.progress ?? 0 : project.taskProgress ?? project.progress ?? 0),
+      } : { ...newProjectDraft(), clientId: clients[0]?.id ?? '' });
+      setSaving(false);
+    }
+  }, [open, project, initialSource, clients]);
+
+  const selectedQuote = quotes.find((quote) => quote.id === form.quoteId);
+  const selectedQuoteClient = selectedQuote
+    ? clients.find((client) => client.id === selectedQuote.clientId)
+    : undefined;
+
+  const selectQuote = (quoteId: string) => {
+    const quote = quotes.find((item) => item.id === quoteId);
+    setForm((current) => ({
+      ...current,
+      quoteId,
+      clientId: quote?.clientId ?? '',
+      name: quote ? `Projeto - ${quote.quoteNumber}` : '',
+      description: quote?.notes ?? '',
+      budget: quote ? String(quote.total) : '',
+    }));
+  };
+
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!form.name.trim() || !form.startDate) {
+      toast({ title: 'Preencha o nome e a data de início.', variant: 'destructive' });
+      return;
+    }
+    if (source === 'manual' && !form.clientId) {
+      toast({ title: 'Selecione um cliente para o projeto.', variant: 'destructive' });
+      return;
+    }
+    if (source === 'quote' && !selectedQuote) {
+      toast({ title: 'Selecione um orçamento aprovado.', variant: 'destructive' });
+      return;
+    }
+    const progress = Number(form.progress);
+    const budget = Number(form.budget);
+    if (!Number.isFinite(progress) || progress < 0 || progress > 100) {
+      toast({ title: 'O progresso deve estar entre 0% e 100%.', variant: 'destructive' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (project) {
+        await projectService.update(project.id, {
+          name: form.name.trim(),
+          clientId: form.clientId,
+          startDate: form.startDate,
+          endDate: form.endDate || undefined,
+          description: form.description.trim() || undefined,
+          budget: budget > 0 ? budget : undefined,
+          progress,
+          status: statusForProgress(progress),
+        });
+      } else if (source === 'quote' && selectedQuote) {
+        await quoteService.convertToProject(selectedQuote.id, {
+          projectName: form.name.trim(),
+          startDate: form.startDate,
+          endDate: form.endDate || undefined,
+          description: form.description.trim() || undefined,
+          budget: budget > 0 ? budget : undefined,
+          progress,
+        });
+      } else {
+        await projectService.create({
+          name: form.name.trim(),
+          clientId: form.clientId,
+          startDate: form.startDate,
+          endDate: form.endDate || undefined,
+          description: form.description.trim() || undefined,
+          budget: budget > 0 ? budget : undefined,
+          progress,
+          status: statusForProgress(progress),
+        });
+      }
+      await onSaved();
+      onClose();
+      toast({
+        title: project ? 'Projeto atualizado!' : source === 'quote' ? 'Projeto criado a partir do orçamento!' : 'Projeto criado com sucesso!',
+        variant: 'success',
+      });
+    } catch (error) {
+      toast({ title: 'Erro ao criar projeto', description: safeError(error), variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{project ? 'Editar projeto' : 'Novo projeto'}</DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={submit} className="space-y-4">
+          {!project && <div className="grid grid-cols-2 gap-2" role="group" aria-label="Origem do projeto">
+            <Button type="button" variant={source === 'manual' ? 'default' : 'outline'} onClick={() => setSource('manual')}>
+              <Plus className="mr-2 h-4 w-4" /> Do zero
+            </Button>
+            <Button type="button" variant={source === 'quote' ? 'default' : 'outline'} onClick={() => setSource('quote')} disabled={!quotes.length}>
+              <ArrowRight className="mr-2 h-4 w-4" /> De orçamento
+            </Button>
+          </div>}
+
+          {source === 'quote' && (
+            <div className="space-y-1.5">
+              <Label>Orçamento aprovado</Label>
+              <Select value={form.quoteId} onValueChange={selectQuote}>
+                <SelectTrigger><SelectValue placeholder="Selecione um orçamento" /></SelectTrigger>
+                <SelectContent>
+                  {quotes.map((quote) => {
+                    const client = clients.find((item) => item.id === quote.clientId);
+                    return (
+                      <SelectItem key={quote.id} value={quote.id}>
+                        {quote.quoteNumber} · {client?.name ?? 'Cliente'} · {formatCurrency(quote.total)}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              {!quotes.length && <p className="text-xs text-muted-foreground">Não há orçamentos aprovados disponíveis.</p>}
+              {selectedQuote && (
+                <p className="text-xs text-muted-foreground">
+                  Cliente: {selectedQuoteClient?.name ?? 'Cliente não encontrado'} · Valor: {formatCurrency(selectedQuote.total)}
+                </p>
+              )}
+            </div>
+          )}
+
+          {(source === 'manual' || project) && (
+            <div className="space-y-1.5">
+              <Label htmlFor="project-client">Cliente</Label>
+              <Select value={form.clientId} onValueChange={(clientId) => setForm((current) => ({ ...current, clientId }))}>
+                <SelectTrigger id="project-client"><SelectValue placeholder="Selecione um cliente" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {!clients.length && <p className="text-xs text-muted-foreground">Cadastre um cliente antes de criar um projeto.</p>}
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="project-name">Nome do projeto</Label>
+            <Input id="project-name" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Ex.: Instalação de câmeras" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="project-start">Início</Label>
+              <Input id="project-start" type="date" value={form.startDate} onChange={(event) => setForm((current) => ({ ...current, startDate: event.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="project-end">Prazo (opcional)</Label>
+              <Input id="project-end" type="date" value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="project-budget">Orçamento (R$)</Label>
+              <Input id="project-budget" type="number" min="0" step="0.01" value={form.budget} onChange={(event) => setForm((current) => ({ ...current, budget: event.target.value }))} placeholder="0,00" />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="project-progress">Progresso (%)</Label>
+              <Input id="project-progress" type="number" min="0" max="100" step="1" value={form.progress} onChange={(event) => setForm((current) => ({ ...current, progress: event.target.value }))} />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="project-description">Descrição (opcional)</Label>
+            <Textarea id="project-description" rows={3} value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Detalhes do projeto..." />
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+            <Button type="submit" disabled={saving || (source === 'manual' && !clients.length) || (source === 'quote' && !quotes.length)}>
+              {saving ? 'Salvando...' : project ? 'Salvar alterações' : source === 'quote' ? 'Converter em projeto' : 'Criar projeto'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -339,24 +589,33 @@ function ProjectCard({ project, clientName, onSummary }: {
 export default function ProjetosPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [clients,  setClients]  = useState<Client[]>([]);
+  const [quotes,   setQuotes]   = useState<Quote[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [query,    setQuery]    = useState('');
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSource, setCreateSource] = useState<ProjectSource>('manual');
 
   const load = async () => {
     setLoading(true);
     try {
-      const [p, c] = await Promise.all([
+      const [p, c, q] = await Promise.all([
         projectService.getAll().catch(() => []),
         clientService.getAll().catch(() => []),
+        quoteService.getAll().catch(() => []),
       ]);
-      setProjects(p); setClients(c);
+      setProjects(p); setClients(c); setQuotes(q);
     } finally { setLoading(false); }
   };
 
   useEffect(() => { void load(); }, []);
 
   const clientNameById = useMemo(() => new Map(clients.map((c) => [c.id, c.name])), [clients]);
+  const availableQuotes = useMemo(() => {
+    const linkedQuoteIds = new Set(projects.map((project) => project.quoteId).filter(Boolean));
+    return quotes.filter((quote) => quote.status === QuoteStatus.Aprovado && !linkedQuoteIds.has(quote.id));
+  }, [projects, quotes]);
 
   const summary = useMemo(() => ({
     total:      projects.length,
@@ -381,6 +640,15 @@ export default function ProjetosPage() {
         clientName={selectedProject ? (clientNameById.get(selectedProject.clientId) ?? 'Cliente não encontrado') : ''}
         onClose={() => setSelectedProject(null)}
       />
+      <ProjectCreateModal
+        open={createOpen || !!editingProject}
+        project={editingProject}
+        initialSource={createSource}
+        clients={clients}
+        quotes={availableQuotes}
+        onClose={() => { setCreateOpen(false); setEditingProject(null); }}
+        onSaved={load}
+      />
 
       <div className="space-y-6">
         {/* Header */}
@@ -389,10 +657,18 @@ export default function ProjetosPage() {
             <h1 className="text-2xl font-bold">Projetos</h1>
             <p className="text-sm text-muted-foreground">Projetos gerados a partir de orçamentos aprovados</p>
           </div>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
-            Atualizar
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+              <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'animate-spin')} />
+              Atualizar
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => { setCreateSource('quote'); setCreateOpen(true); }} disabled={!availableQuotes.length} title={!availableQuotes.length ? 'Não há orçamentos aprovados disponíveis' : undefined}>
+              <ArrowRight className="mr-2 h-4 w-4" /> De orçamento
+            </Button>
+            <Button size="sm" onClick={() => { setCreateSource('manual'); setCreateOpen(true); }}>
+              <Plus className="mr-2 h-4 w-4" /> Novo projeto
+            </Button>
+          </div>
         </div>
 
         {/* StatCards */}
@@ -479,6 +755,7 @@ export default function ProjetosPage() {
                   project={project}
                   clientName={clientNameById.get(project.clientId) ?? 'Cliente não encontrado'}
                   onSummary={() => setSelectedProject(project)}
+                  onEdit={() => setEditingProject(project)}
                 />
               ))}
             </div>
