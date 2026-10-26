@@ -47,7 +47,7 @@ services:
       ADMIN_PASSWORD: "admin"
       ADMIN_NAME:     "Administrador"
       FRONTEND_URL:   "http://localhost:3000"
-      NODE_ENV:       production
+      NODE_ENV:       development
       PORT:           3002
       RUN_SEED:       "false"
     networks:

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { API_URL, authService, settingsService } from '@/services/api';
 import type { User } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -36,6 +37,14 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   overdueInvoices: true,
   weeklyReports:   false,
 };
+
+const isThemeMode = (value: unknown): value is ThemeMode =>
+  value === 'light' || value === 'dark' || value === 'auto';
+
+const toProviderTheme = (theme: ThemeMode) => theme === 'auto' ? 'system' : theme;
+
+const fromProviderTheme = (theme: string | null) =>
+  theme === 'dark' ? 'dark' : theme === 'system' ? 'auto' : 'light';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -265,6 +274,7 @@ function InfoRow({ label, value, mono = false, highlight = false }: {
 
 export default function ConfiguracoesPage() {
   const router = useRouter();
+  const { setTheme: setProviderTheme } = useTheme();
   const [user,          setUser]          = useState<User | null>(null);
   const [theme,         setTheme]         = useState<ThemeMode>('light');
   const [notifications, setNotifications] = useState<NotificationSettings>(DEFAULT_NOTIFICATIONS);
@@ -279,8 +289,17 @@ export default function ConfiguracoesPage() {
         settingsService.getSettings().catch(() => null),
       ]);
       setUser(currentUser);
+      const localTheme = localStorage.getItem('app-theme-mode');
+      const providerTheme = localStorage.getItem('theme');
+      const savedTheme = isThemeMode(localTheme)
+        ? localTheme
+        : providerTheme
+          ? fromProviderTheme(providerTheme)
+          : isThemeMode(settings?.theme) ? settings.theme : 'light';
+      setTheme(savedTheme);
+      setProviderTheme(toProviderTheme(savedTheme));
+      localStorage.setItem('app-theme-mode', savedTheme);
       if (settings) {
-        setTheme((settings.theme as ThemeMode) ?? 'light');
         setNotifications(parseNotifications(settings.notifications));
       }
     } catch {
@@ -288,11 +307,15 @@ export default function ConfiguracoesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setProviderTheme]);
 
   useEffect(() => { void loadData(); }, [loadData]);
 
-  const handleThemeChange = (t: ThemeMode) => setTheme(t);
+  const handleThemeChange = (t: ThemeMode) => {
+    setTheme(t);
+    localStorage.setItem('app-theme-mode', t);
+    setProviderTheme(toProviderTheme(t));
+  };
 
   const handleNotificationChange = (key: keyof NotificationSettings, value: boolean) =>
     setNotifications((n) => ({ ...n, [key]: value }));

@@ -75,7 +75,7 @@ router.post('/login', async (req, res) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
 
-    if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
+    if (process.env.NODE_ENV !== 'production' && email === DEMO_EMAIL && password === DEMO_PASSWORD) {
       return res.json({
         user: DEMO_USER,
         token: createToken(DEMO_USER.id),
