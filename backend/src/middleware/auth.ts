@@ -6,6 +6,13 @@ interface AuthRequest extends Request {
   user?: any;
 }
 
+const DEMO_USER = {
+  id: 'demo-user',
+  name: 'Administrador Demo',
+  email: 'admin@admin.com',
+  role: 'ADMIN',
+};
+
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -16,6 +23,12 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+
+    if (process.env.NODE_ENV !== 'production' && decoded.userId === DEMO_USER.id) {
+      req.user = DEMO_USER;
+      return next();
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
       select: { id: true, email: true, name: true, role: true }

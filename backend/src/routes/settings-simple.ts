@@ -34,7 +34,6 @@ router.get('/', async (req, res) => {
     }
 
     const settings = userSettings[userId] || {
-      theme: 'light',
       notifications: {
         newQuotes: true,
         overdueInvoices: true,
